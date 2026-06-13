@@ -1,0 +1,126 @@
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum SystemAccess {
+  SUPER_ADMIN
+  ADMIN
+  USER
+}
+
+enum OrgRole {
+  PRESIDENT
+  DIRECTOR
+  MEMBER
+}
+
+enum DeptRole {
+  MANAGER
+  MEMBER
+}
+
+enum TaskStatus {
+  BACKLOG
+  TODO
+  IN_PROGRESS
+  COMPLETED
+}
+
+model User {
+  id               String             @id @default(auto()) @map("_id") @db.ObjectId
+  email            String             @unique
+  name             String
+  password         String
+  systemAccess     SystemAccess       @default(USER)
+  orgMemberships   OrgMember[]
+  deptMemberships  DeptMember[]
+  assignedTasks    Task[]             @relation("TaskAssignee")
+  assignedByTasks  Task[]             @relation("TaskAssigner")
+  apiTokens        ApiToken[]
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+}
+
+model Organisation {
+  id          String      @id @default(auto()) @map("_id") @db.ObjectId
+  name        String
+  description String
+  members     OrgMember[]
+  departments Department[]
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+}
+
+model OrgMember {
+  id             String       @id @default(auto()) @map("_id") @db.ObjectId
+  userId         String       @db.ObjectId
+  organisationId String       @db.ObjectId
+  orgRole        OrgRole      @default(MEMBER)
+  permissionsAllowed String[] @default([])
+
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organisation   Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, organisationId])
+}
+
+model Department {
+  id             String       @id @default(auto()) @map("_id") @db.ObjectId
+  organisationId String       @db.ObjectId
+  name           String
+  description    String
+  members        DeptMember[]
+  tasks          Task[]
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  organisation   Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+}
+
+model DeptMember {
+  id           String     @id @default(auto()) @map("_id") @db.ObjectId
+  userId       String     @db.ObjectId
+  departmentId String     @db.ObjectId
+  deptRole     DeptRole   @default(MEMBER)
+  permissionsAllowed String[] @default([])
+
+  user         User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  department   Department @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, departmentId])
+}
+
+model Task {
+  id           String     @id @default(auto()) @map("_id") @db.ObjectId
+  departmentId String     @db.ObjectId
+  title        String
+  description  String
+  status       TaskStatus @default(TODO)
+  assigneeId   String?    @db.ObjectId
+  assignerId   String     @db.ObjectId
+  dueDate      DateTime
+  acceptedAt   DateTime?
+  completedAt  DateTime?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  department   Department @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  assignee     User?      @relation("TaskAssignee", fields: [assigneeId], references: [id])
+  assigner     User       @relation("TaskAssigner", fields: [assignerId], references: [id])
+}
+
+model ApiToken {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId      String   @db.ObjectId
+  tokenHash   String   @unique
+  name        String
+  createdAt   DateTime @default(now())
+  expiresAt   DateTime
+
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
